@@ -1,0 +1,180 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.FormWO..Create(BaseForm)
+Gui.FormWO..Caption("ARC 6951")
+Gui.FormWO..Size(364,160)
+Gui.FormWO..MinX(0)
+Gui.FormWO..MinY(0)
+Gui.FormWO..Position(0,0)
+Gui.FormWO..AlwaysOnTop(False)
+Gui.FormWO..FontName("Tahoma")
+Gui.FormWO..FontSize(8.25)
+Gui.FormWO..ControlBox(True)
+Gui.FormWO..MaxButton(True)
+Gui.FormWO..MinButton(True)
+Gui.FormWO..MousePointer(0)
+Gui.FormWO..Moveable(True)
+Gui.FormWO..Sizeable(True)
+Gui.FormWO..ShowInTaskBar(True)
+Gui.FormWO..TitleBar(True)
+Gui.FormWO..Event(UnLoad,FormWO_UnLoad)
+Gui.FormWO.lbl1.Create(Label,"Current Setup",True,68,13,0,33,57,True,0,"Tahoma",8.25,,0,0)
+Gui.FormWO.lbl1.BorderStyle(0)
+Gui.FormWO.lbl2.Create(Label,"Current Runtime",True,79,13,0,22,90,True,0,"Tahoma",8.25,,0,0)
+Gui.FormWO.lbl2.BorderStyle(0)
+Gui.FormWO.txtSetup.Create(TextBox,"",True,96,20,0,110,53,True,0,"Tahoma",8.25,,1)
+Gui.FormWO.txtSetup.NumericOnly(1)
+Gui.FormWO.txtRuntime.Create(TextBox,"",True,95,20,0,110,86,True,0,"Tahoma",8.25,,1)
+Gui.FormWO.txtRuntime.NumericOnly(1)
+Gui.FormWO.cmdSave.Create(Button)
+Gui.FormWO.cmdSave.Enabled(True)
+Gui.FormWO.cmdSave.Visible(True)
+Gui.FormWO.cmdSave.Zorder(0)
+Gui.FormWO.cmdSave.Size(66,23)
+Gui.FormWO.cmdSave.Position(278,67)
+Gui.FormWO.cmdSave.Caption("Save")
+Gui.FormWO.cmdSave.FontName("Tahoma")
+Gui.FormWO.cmdSave.FontSize(8.25)
+Gui.FormWO.cmdSave.Event(Click,cmdSave_Click)
+Gui.FormWO.lbl3.Create(Label,"Job-Suffix-Seq",True,83,13,0,18,18,True,0,"Tahoma",8.25,,0,0)
+Gui.FormWO.lbl3.BorderStyle(0)
+Gui.FormWO.lbl3.FontStyle(True,False,False,False,False)
+Gui.FormWO.txtJSS.Create(TextBox,"",True,143,20,0,110,14,True,0,"Tahoma",8.25,,1)
+Gui.FormWO.txtJSS.Locked(True)
+Gui.FormWO.lbl4.Create(Label,"hours",True,27,13,0,210,60,True,0,"Tahoma",8.25,,0,0)
+Gui.FormWO.lbl4.BorderStyle(0)
+Gui.FormWO.lbl5.Create(Label,"minutes",True,37,13,0,210,93,True,0,"Tahoma",8.25,,0,0)
+Gui.FormWO.lbl5.BorderStyle(0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.sError.Declare(String)
+V.Global.sARCID.Declare(String, "ARC 6951")
+V.Global.sJob.Declare(String)
+V.Global.sSuffix.Declare(String)
+V.Global.sSeq.Declare(String)
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Author: Arturo Almaguer
+'Date: 10/25/22
+'Customer: P & L MACHINE COMPANY, quote: 13817
+'This program populates a new screen to update setup and runtime after a WO has been updated in the SFDC.Net.
+'This script is fired off hook 50630 - SFDC.Net Update Work Orders Screen Post OK hook
+
+Function.Intrinsic.UI.UsePixels ' Allows you to use Pixels instead of Twips throughout
+
+F.Intrinsic.Control.Try
+
+	V.Local.sWO.Declare(String)
+	V.Local.sSQL.Declare(String)
+	V.Local.sValues.Declare(String)
+	V.Local.fSetup.Declare(Float)
+	V.Local.fRuntime.Declare(Float)
+	V.Local.iCounter.Declare(Long)
+	V.Local.sTemp.Declare(String)
+	V.Local.sJSS.Declare(String)
+		
+	'Reading BDF to get selected JSS
+	F.Intrinsic.BDF.Load("GAB-BDF", "UpdateJobsView-gvWOOperations-bdf")
+	F.Intrinsic.BDF.ReadRow("GAB-BDF", V.Local.iCounter, V.Local.sTemp)
+	F.Intrinsic.String.Split(V.Local.sTemp, "|~|", V.Local.sTemp)
+	V.Local.sWO.Set(V.Local.sTemp(0))
+	F.Intrinsic.String.Split(V.Local.sWO, "-", V.Local.sWO)
+	
+	'Setting variables
+	V.Global.sJob.Set(V.Local.sWO(0))
+	V.Global.sSuffix.Set(V.Local.sWO(1))
+	V.Global.sSeq.Set(V.Local.sTemp(1))
+	
+	'Retrieving current setup and estimate runtime for the selected JSS
+	F.ODBC.Connection!Con.OpenCompanyConnection
+	F.Intrinsic.String.Build("select SETUP, UNITS from V_JOB_OPERATIONS where JOB = '{0}' and SUFFIX = '{1}' and SEQ = '{2}';", V.Global.sJob, V.Global.sSuffix, V.Global.sSeq, V.Local.sSQL)
+	F.ODBC.Connection!Con.ExecuteAndReturn(V.Local.sSQL, V.Local.sValues)
+	
+	F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF, =, False)
+		
+		'Splitting returned variable
+		F.Intrinsic.String.Split(V.Local.sValues, "*!*", V.Local.sValues)
+		
+		'Setting values to screen's textboxes
+		V.Local.fSetup.Set(V.Local.sValues(0))
+		GUI.FormWO.txtSetup.Text(V.Local.fSetup)
+		
+		'Runtime is stored as hours in DB and customer would like to display it in minutes
+		V.Local.fRuntime.Set(V.Local.sValues(1))
+		F.Intrinsic.Math.Mult(V.Local.fRuntime, 60, V.Local.fRuntime)
+		GUI.FormWO.txtRuntime.Text(V.Local.fRuntime)
+		
+		F.Intrinsic.String.Build("{0} - {1} - {2}", V.Global.sJob, V.Global.sSuffix, V.Global.sSeq, V.Local.sJSS)
+		GUI.FormWO.txtJSS.Text(V.Local.sJSS)
+		
+	F.Intrinsic.Control.EndIf
+	
+	'Displaying form
+	GUI.FormWO..Show
+
+F.Intrinsic.Control.Catch
+
+	F.Intrinsic.Control.CallSub(CatchError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.FormWO_UnLoad.Start
+'Closes the connection if it is open
+f.Intrinsic.Control.If(v.ODBC.con.exists,=,"1") 	
+    f.ODBC.Connection!Con.Close
+f.Intrinsic.Control.EndIf
+
+'Closing screen
+GUI.FormWO..Visible(False)
+
+'Ending program
+F.Intrinsic.Control.End
+Program.Sub.FormWO_UnLoad.End
+
+Program.Sub.CatchError.Start
+'To display the error
+F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.SubroutineCalledFrom, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Global.sError) 
+F.Intrinsic.UI.Msgbox(V.Global.sError, V.Global.sARCID)
+F.Intrinsic.Control.CallSub("FormWO_UnLoad")
+Program.Sub.CatchError.End
+
+Program.Sub.cmdSave_Click.Start
+'This subroutine updates the setup and runtime for the selected JSS
+
+F.Intrinsic.Control.Try
+
+	V.Local.sSQL.Declare(String)
+	V.Local.fSetup.Declare(Float)
+	V.Local.fRuntime.Declare(Float)
+	
+	'Setting variables
+	'NOTE: Textboxes were set to only accept numeric values
+	
+	V.Local.fSetup.Set(V.Screen.FormWO!txtSetup.Text)
+	
+	'Runtime is stored as hours in DB and customer would like to display it in minutes
+	V.Local.fRuntime.Set(V.Screen.FormWO!txtRuntime.Text)
+	F.Intrinsic.Math.Div(V.Local.fRuntime, 60, V.Local.fRuntime)
+	
+	'Updating values in JOB_OPERATIONS for selected JSS
+	F.Intrinsic.String.Build("update JOB_OPERATIONS set SETUP = '{0}', UNITS = '{1}' where JOB = '{2}' and SUFFIX = '{3}' and SEQ = '{4}';", V.Local.fSetup, V.Local.fRuntime, V.Global.sJob, V.Global.sSuffix, V.Global.sSeq, V.Local.sSQL)
+	F.ODBC.Connection!Con.Execute(V.Local.sSQL)
+	
+	'Displaying msgbox and then unload
+	f.Intrinsic.UI.Msgbox("Values have been saved.", V.Global.sARCID)
+	F.Intrinsic.Control.CallSub("FormWO_UnLoad")
+
+F.Intrinsic.Control.Catch
+
+	F.Intrinsic.Control.CallSub(CatchError)
+	
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdSave_Click.End
+
+Program.Sub.Comments.Start
+${$5$}$20.1.8223.27623$}$1
+${$6$}$apadilla$}$20221028151440503$}$Lag9STqBJOmNXSbd5+msRcBWPGz0aFqSmhrQDKqKcnV7bx7lfkwFLzV1+/aPr0jGgpOyTKHIIpyLN3Q4LR63bA==
+Program.Sub.Comments.End
